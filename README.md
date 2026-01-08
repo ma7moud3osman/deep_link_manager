@@ -3,6 +3,8 @@
 ## Overview
 The Deep Link feature provides a robust, generic architecture for handling deep links (Universal Links, App Links, Custom Schemes) in Flutter applications. It decouples the deep link handling logic from the main app flow and provides centralized management for authentication requirements.
 
+This package is built on top of the excellent [app_links](https://pub.dev/packages/app_links) package, providing a higher-level abstraction for strategy-based link handling and authentication guards.
+
 ## Core Components
 1.  **DeepLinkManager**: A singleton that listens for incoming links (initial & stream), manages application readiness state (`isAppReady`), handles queued links with expiration, and guards against race conditions.
 2.  **DeepLinkStrategy**: An abstract class that you implement to define how to handle specific types of links. Includes priority ordering and unique identifiers.

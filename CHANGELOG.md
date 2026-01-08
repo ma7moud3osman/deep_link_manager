@@ -1,3 +1,7 @@
+## 0.1.2
+
+*   Updated documentation to credit `app_links` package.
+
 ## 0.1.1
 
 *   Added example project.
