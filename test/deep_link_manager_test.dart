@@ -251,6 +251,51 @@ void main() {
       verify(() => strategy.handle(uri, any(), any())).called(1);
     });
 
+    testWidgets('checkPendingLinks manually triggers processing',
+        (tester) async {
+      final uri = Uri.parse('app://manual');
+      final strategy = MockDeepLinkStrategy();
+      when(() => strategy.identifier).thenReturn('ManualStrategy');
+      when(() => strategy.priority).thenReturn(0);
+      when(() => strategy.canHandle(uri)).thenReturn(true);
+      when(() => strategy.extractData(uri)).thenReturn(null);
+      when(() => strategy.requiresAuth).thenReturn(false);
+
+      manager.registerStrategy(strategy);
+
+      final controller = StreamController<Uri>();
+      when(() => mockAppLinks.uriLinkStream)
+          .thenAnswer((_) => controller.stream);
+      await manager.initialize();
+
+      await tester.pumpWidget(MaterialApp(
+        navigatorKey: manager.navigatorKey,
+        home: const Scaffold(body: Text('Home')),
+      ));
+
+      // 1. Receive link not ready
+      controller.add(uri);
+      await tester.pump();
+      expect(manager.hasPendingLink, isTrue);
+
+      // 2. Do NOT setAppReady, but manually check
+      // Note: checkPendingLinks implementation only processes if context is available.
+      // So app must be conceptually "ready" or at least mounted.
+      // It calls _checkPendingLink which checks context != null.
+
+      manager.checkPendingLinks();
+      await tester.pump();
+
+      verify(() => strategy.handle(uri, any(), any())).called(1);
+      expect(manager.hasPendingLink, isFalse);
+    });
+
+    test('initializes with injected navigatorKey', () async {
+      final customKey = GlobalKey<NavigatorState>();
+      await manager.initialize(navigatorKey: customKey);
+      expect(manager.navigatorKey, equals(customKey));
+    });
+
     testWidgets('does not crash on strategy error', (tester) async {
       final uri = Uri.parse('app://error');
       final strategy = MockDeepLinkStrategy();

@@ -34,8 +34,13 @@ class DeepLinkManager {
     AppLinks? appLinks,
   }) : _appLinks = appLinks ?? AppLinks();
 
-  final AppLinks _appLinks;
-  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  AppLinks _appLinks;
+  GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  /// The navigator key used for navigation.
+  /// You can use this key in your [MaterialApp] or [GoRouter],
+  /// or providing your own key via [initialize].
+  GlobalKey<NavigatorState> get navigatorKey => _navigatorKey;
 
   final List<DeepLinkStrategy> _strategies = [];
   StreamSubscription? _linkSubscription;
@@ -79,11 +84,13 @@ class DeepLinkManager {
   /// Initialize deep link listening.
   /// [strategies]: List of strategies to handle deep links.
   /// [authProvider]: Optional typed auth provider for authentication checks.
+  /// [navigatorKey]: Optional navigator key if you want to use your own instead of the built-in one.
   /// [onLog]: Optional callback for debugging logs (e.g. print to console).
   /// [onError]: Optional callback for reporting errors (e.g. to Crashlytics).
   Future<void> initialize({
     List<DeepLinkStrategy> strategies = const [],
     DeepLinkAuthProvider? authProvider,
+    GlobalKey<NavigatorState>? navigatorKey,
     void Function(String message)? onLog,
     void Function(Object error, StackTrace stack)? onError,
   }) async {
@@ -95,11 +102,21 @@ class DeepLinkManager {
 
     _onLog = onLog;
     _onError = onError;
-
     _authProvider = authProvider;
+
+    if (navigatorKey != null) {
+      _navigatorKey = navigatorKey;
+    }
 
     // Register initial strategies
     for (final strategy in strategies) {
+      // Validate auth configuration
+      if (strategy.requiresAuth && _authProvider == null) {
+        // We log a warning instead of throwing to prevent crashing the app startup,
+        // but this is a critical configuration error.
+        _log(
+            'WARNING: Strategy "${strategy.identifier}" requires auth, but no authProvider was provided.');
+      }
       registerStrategy(strategy);
     }
 
@@ -224,6 +241,14 @@ class DeepLinkManager {
     }
   }
 
+  /// Triggers a check for pending links.
+  /// Use this method after a successful login to automatically process
+  /// any deep links that were waiting for authentication.
+  void checkPendingLinks() {
+    _log('Manually checking pending links');
+    _checkPendingLink();
+  }
+
   void _checkPendingLink() {
     if (_pendingStrategy == null) return;
 
@@ -254,6 +279,7 @@ class DeepLinkManager {
       _executeStrategy(_pendingStrategy!, _pendingUri ?? Uri(), _pendingData);
       _clearPending();
     }
+    // Else: context still null/unmounted, wait for next check or setAppReady
   }
 
   void _clearPending() {

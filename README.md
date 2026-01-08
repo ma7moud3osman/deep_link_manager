@@ -210,10 +210,11 @@ void main() async {
 
 ### 5. Router Configuration
 Use the `navigatorKey` from `DeepLinkManager` in your Router config.
+Alternatively, you can pass your own `navigatorKey` to `initialize`.
 
 ```dart
 final _router = GoRouter(
-  navigatorKey: DeepLinkManager().navigatorKey, // <--- CRITICAL
+  navigatorKey: deepLinkManager.navigatorKey, // <--- Use the same instance
   // ...
 );
 ```
@@ -227,6 +228,17 @@ void onSplashFinished() {
 }
 ```
 
+### 7. Handling Authentication
+If a deep link requires authentication, it will be queued until the user logs in.
+After a successful login, call `checkPendingLinks()` to process any waiting links.
+
+```dart
+// In your Login Bloc/Provider
+void onLoginSuccess() {
+  DeepLinkManager().checkPendingLinks();
+}
+```
+
 ---
 
 ## API Reference
@@ -236,10 +248,11 @@ void onSplashFinished() {
 | Method | Description |
 |--------|-------------|
 | `registerStrategy(DeepLinkStrategy)` | Add a strategy (sorted by priority) |
-| `initialize({strategies, authProvider})` | Start listener with strategies and auth provider |
+| `initialize({strategies, authProvider, navigatorKey})` | Start listener with components |
 | `setAppReady()` | Signal UI ready, process pending links |
+| `checkPendingLinks()` | Manually trigger processing (e.g., after login) |
 | `clearPendingLink()` | Clear pending links (e.g., on logout) |
-| `navigatorKey` | GlobalKey for MaterialApp/GoRouter |
+| `navigatorKey` | GlobalKey for Navigation (injected or default) |
 | `hasPendingLink` | Check if a link is queued |
 | `isInitialized` | Check if initialization completed |
 
