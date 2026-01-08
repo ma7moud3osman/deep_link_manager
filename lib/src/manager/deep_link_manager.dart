@@ -60,21 +60,30 @@ class DeepLinkManager {
   /// Typed auth provider for secure authentication handling
   DeepLinkAuthProvider? _authProvider;
 
+  // Observability callbacks
+  void Function(String message)? _onLog;
+  void Function(Object error, StackTrace stack)? _onError;
+
   /// Register a new strategy for handling deep links.
   /// Strategies are sorted by priority (higher first).
   void registerStrategy(DeepLinkStrategy strategy) {
     _strategies.add(strategy);
     // Sort by priority descending (higher priority first)
     _strategies.sort((a, b) => b.priority.compareTo(a.priority));
-    log('[DeepLinkManager] Registered strategy: ${strategy.identifier} (priority: ${strategy.priority})');
+    _log(
+        'Registered strategy: ${strategy.identifier} (priority: ${strategy.priority})');
   }
 
   /// Initialize deep link listening.
   /// [strategies]: List of strategies to handle deep links.
   /// [authProvider]: Optional typed auth provider for authentication checks.
+  /// [onLog]: Optional callback for debugging logs (e.g. print to console).
+  /// [onError]: Optional callback for reporting errors (e.g. to Crashlytics).
   Future<void> initialize({
     List<DeepLinkStrategy> strategies = const [],
     DeepLinkAuthProvider? authProvider,
+    void Function(String message)? onLog,
+    void Function(Object error, StackTrace stack)? onError,
   }) async {
     // Prevent multiple initializations
     if (_initializationCompleter != null) {
@@ -82,42 +91,60 @@ class DeepLinkManager {
     }
     _initializationCompleter = Completer();
 
+    _onLog = onLog;
+    _onError = onError;
+
+    _authProvider = authProvider;
+
     // Register initial strategies
     for (final strategy in strategies) {
       registerStrategy(strategy);
     }
 
-    _authProvider = authProvider;
-
     // Handle initial link (app opened from terminated state)
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) {
-        log('[DeepLinkManager] Initial deep link: $initialUri');
+        _log('Initial deep link: $initialUri');
         _processLink(initialUri);
       }
-    } catch (e) {
-      log('[DeepLinkManager] Error getting initial link: $e');
+    } catch (e, stack) {
+      _reportError(e, stack);
     }
 
     // Handle links while app is running
     _linkSubscription = _appLinks.uriLinkStream.listen(
       (uri) {
-        log('[DeepLinkManager] Deep link received: $uri');
+        _log('Deep link received: $uri');
         _processLink(uri);
       },
-      onError: (err) {
-        log('[DeepLinkManager] Deep link error: $err');
+      onError: (err, stack) {
+        _reportError(err, stack is StackTrace ? stack : StackTrace.current);
       },
     );
 
     _initializationCompleter!.complete();
   }
 
+  void _log(String message) {
+    if (_onLog != null) {
+      _onLog!('[DeepLinkManager] $message');
+    } else {
+      log('[DeepLinkManager] $message');
+    }
+  }
+
+  void _reportError(Object error, StackTrace stack) {
+    _log('Error: $error');
+    if (_onError != null) {
+      _onError!(error, stack);
+    }
+  }
+
   void _processLink(Uri uri) {
     // Guard against re-entrant processing
     if (_isProcessing) {
-      log('[DeepLinkManager] Already processing a link, ignoring: $uri');
+      _log('Already processing a link, ignoring: $uri');
       return;
     }
     _isProcessing = true;
@@ -125,14 +152,14 @@ class DeepLinkManager {
     try {
       for (final strategy in _strategies) {
         if (strategy.canHandle(uri)) {
-          log('[DeepLinkManager] Matched strategy: ${strategy.identifier}');
+          _log('Matched strategy: ${strategy.identifier}');
           final data = strategy.extractData(uri);
 
           // Check auth requirement
           if (strategy.requiresAuth) {
             final isAuthed = _authProvider?.isAuthenticated ?? false;
             if (!isAuthed) {
-              log('[DeepLinkManager] Auth required for $uri');
+              _log('Auth required for $uri');
               // Store as pending so we can handle it after login
               _storePending(uri, data, strategy);
               _authProvider?.onAuthRequired(uri);
@@ -141,16 +168,16 @@ class DeepLinkManager {
           }
 
           if (_canHandleNow(strategy)) {
-            log('[DeepLinkManager] App ready, handling link immediately');
+            _log('App ready, handling link immediately');
             _executeStrategy(strategy, uri, data);
           } else {
-            log('[DeepLinkManager] App not ready, storing pending link data');
+            _log('App not ready, storing pending link data');
             _storePending(uri, data, strategy);
           }
           return; // Handled by first matching strategy
         }
       }
-      log('[DeepLinkManager] No strategy found for uri: $uri');
+      _log('No strategy found for uri: $uri');
     } finally {
       _isProcessing = false;
     }
@@ -176,12 +203,12 @@ class DeepLinkManager {
       if (context != null && context.mounted) {
         strategy.handle(uri, context, data);
       } else {
-        log('[DeepLinkManager] Context unavailable, re-queuing link');
+        _log('Context unavailable, re-queuing link');
         _storePending(uri, data, strategy);
       }
     } catch (e, stack) {
-      log('[DeepLinkManager] Error executing strategy ${strategy.identifier}: $e');
-      log('[DeepLinkManager] Stack trace: $stack');
+      _log('Error executing strategy ${strategy.identifier}: $e');
+      _reportError(e, stack);
       _clearPending(); // Prevent retry loops on persistent errors
     }
   }
@@ -189,7 +216,7 @@ class DeepLinkManager {
   /// Call this when the app (e.g., SplashScreen) is done and can handle navigation.
   void setAppReady() {
     _isAppReady = true;
-    log('[DeepLinkManager] App marked as ready');
+    _log('App marked as ready');
 
     // Only process pending if fully initialized
     if (isInitialized) {
@@ -204,7 +231,7 @@ class DeepLinkManager {
     if (_pendingLinkTimestamp != null) {
       final elapsed = DateTime.now().difference(_pendingLinkTimestamp!);
       if (elapsed > _kPendingLinkExpiration) {
-        log('[DeepLinkManager] Pending link expired after ${elapsed.inMinutes} minutes');
+        _log('Pending link expired after ${elapsed.inMinutes} minutes');
         _clearPending();
         return;
       }
@@ -218,12 +245,12 @@ class DeepLinkManager {
       if (_pendingStrategy!.requiresAuth) {
         final isAuthed = _authProvider?.isAuthenticated ?? false;
         if (!isAuthed) {
-          log('[DeepLinkManager] Pending link requires auth, still not authed. Waiting.');
+          _log('Pending link requires auth, still not authed. Waiting.');
           return;
         }
       }
 
-      log('[DeepLinkManager] Processing pending deep link');
+      _log('Processing pending deep link');
       _executeStrategy(_pendingStrategy!, _pendingUri ?? Uri(), _pendingData);
       _clearPending();
     }
