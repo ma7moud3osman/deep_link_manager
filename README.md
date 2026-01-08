@@ -43,6 +43,12 @@ Add/Merge the `CFBundleURLTypes` for custom schemes:
 3.  Add **Associated Domains**.
 4.  Add your domain with the `applinks:` prefix: `applinks:<host>`.
 
+> **Note (Flutter 3.24+):** You **MUST** add the following to `Info.plist` to disable Flutter's default deep link handling:
+> ```xml
+> <key>FlutterDeepLinkingEnabled</key>
+> <false/>
+> ```
+
 ### 2. Android Configuration
 **File:** `android/app/src/main/AndroidManifest.xml`
 
@@ -64,9 +70,47 @@ Add `intent-filter` entries inside the main `<activity>`:
     <category android:name="android.intent.category.BROWSABLE" />
     <data android:scheme="https" android:host="<host>" />
 </intent-filter>
+
+<meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
 ```
 *   **`<scheme>`**: Example: `micropet`
 *   **`<host>`**: Example: `micropet-web.vercel.app`
+
+> **Note (Flutter 3.24+):** You **MUST** add the `flutter_deeplinking_enabled` metadata with value `false` to disable Flutter's default deep link handling, which conflicts with this package.
+
+### 3. Android 13+ Debugging
+On Android 13 and newer, App Links may not be automatically enabled in **debug builds**.
+*   Go to **App Info** (Long press app icon > App Info).
+*   Select **Open by default**.
+*   Tap **Add link** and select your supported specific links.
+
+---
+
+## 🧪 Testing
+
+### Android (ADB)
+You can test deep links without a web page using ADB:
+
+```bash
+# Custom Scheme
+adb shell am start -a android.intent.action.VIEW \
+  -d "micropet://product/123"
+
+# App Link
+adb shell am start -a android.intent.action.VIEW \
+  -d "https://micropet-web.vercel.app/product/123"
+```
+
+### iOS (Simulator)
+You can test on the iOS simulator using `xcrun`:
+
+```bash
+# Custom Scheme
+xcrun simctl openurl booted "micropet://product/123"
+
+# Universal Link
+xcrun simctl openurl booted "https://micropet-web.vercel.app/product/123"
+```
 
 ---
 
