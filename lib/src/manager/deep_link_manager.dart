@@ -20,9 +20,11 @@ class DeepLinkManager {
   /// Internal constructor.
   DeepLinkManager._internal() : _appLinks = AppLinks();
 
+  static DeepLinkManager get instance => _instance;
+
   /// Visible for testing to inject a mock instance.
   @visibleForTesting
-  static void setInstance(DeepLinkManager manager) {
+  static set instance(DeepLinkManager manager) {
     _instance = manager;
   }
 

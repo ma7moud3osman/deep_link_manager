@@ -37,7 +37,7 @@ void main() {
     when(() => mockAppLinks.getInitialLink()).thenAnswer((_) async => null);
 
     manager = DeepLinkManager.test(appLinks: mockAppLinks);
-    DeepLinkManager.setInstance(manager);
+    DeepLinkManager.instance = manager;
   });
 
   tearDown(() {
