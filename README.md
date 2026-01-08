@@ -195,9 +195,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final deepLinkManager = DeepLinkManager();
-  deepLinkManager.registerStrategy(MyDeepLinkStrategy());
-
   await deepLinkManager.initialize(
+    strategies: [
+      MyDeepLinkStrategy(),
+    ],
     authProvider: AppDeepLinkAuthProvider(deepLinkManager.navigatorKey),
   );
 
@@ -233,7 +234,7 @@ void onSplashFinished() {
 | Method | Description |
 |--------|-------------|
 | `registerStrategy(DeepLinkStrategy)` | Add a strategy (sorted by priority) |
-| `initialize({authProvider})` | Start link listener with typed auth provider |
+| `initialize({strategies, authProvider})` | Start listener with strategies and auth provider |
 | `setAppReady()` | Signal UI ready, process pending links |
 | `clearPendingLink()` | Clear pending links (e.g., on logout) |
 | `navigatorKey` | GlobalKey for MaterialApp/GoRouter |
