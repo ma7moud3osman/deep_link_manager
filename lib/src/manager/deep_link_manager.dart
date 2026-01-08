@@ -70,8 +70,10 @@ class DeepLinkManager {
   }
 
   /// Initialize deep link listening.
+  /// [strategies]: List of strategies to handle deep links.
   /// [authProvider]: Optional typed auth provider for authentication checks.
   Future<void> initialize({
+    List<DeepLinkStrategy> strategies = const [],
     DeepLinkAuthProvider? authProvider,
   }) async {
     // Prevent multiple initializations
@@ -79,6 +81,11 @@ class DeepLinkManager {
       return _initializationCompleter!.future;
     }
     _initializationCompleter = Completer();
+
+    // Register initial strategies
+    for (final strategy in strategies) {
+      registerStrategy(strategy);
+    }
 
     _authProvider = authProvider;
 
