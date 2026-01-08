@@ -118,7 +118,7 @@ class DeepLinkManager {
         _log('Deep link received: $uri');
         _processLink(uri);
       },
-      onError: (err, stack) {
+      onError: (Object err, stack) {
         _reportError(err, stack is StackTrace ? stack : StackTrace.current);
       },
     );
@@ -128,7 +128,7 @@ class DeepLinkManager {
 
   void _log(String message) {
     if (_onLog != null) {
-      _onLog!('[DeepLinkManager] $message');
+      _onLog?.call('[DeepLinkManager] $message');
     } else {
       log('[DeepLinkManager] $message');
     }
@@ -136,9 +136,7 @@ class DeepLinkManager {
 
   void _reportError(Object error, StackTrace stack) {
     _log('Error: $error');
-    if (_onError != null) {
-      _onError!(error, stack);
-    }
+    _onError?.call(error, stack);
   }
 
   void _processLink(Uri uri) {
