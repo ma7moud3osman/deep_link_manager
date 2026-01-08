@@ -2,6 +2,13 @@ name: deep_link_manager
 description: A generic deep link management package for Flutter.
 version: 0.1.0
 homepage: https://github.com/ma7moud3osman/deep_link_manager
+repository: https://github.com/ma7moud3osman/deep_link_manager
+issue_tracker: https://github.com/ma7moud3osman/deep_link_manager/issues
+topics:
+  - deep-linking
+  - navigation
+  - strategy-pattern
+  - routing
 environment:
   sdk: ">=3.0.0 <4.0.0"
   flutter: ">=3.0.0"
