@@ -118,12 +118,14 @@ xcrun simctl openurl booted "https://micropet-web.vercel.app/product/123"
 
 ## 🚀 Quick Setup Guide
 
-### 1. Dependencies
-Ensure `app_links` is added to your `pubspec.yaml`:
+### 1. Installation
+Add `deep_link_manager` to your `pubspec.yaml`:
 ```yaml
 dependencies:
-  app_links: ^6.3.1 # check for latest version
+  deep_link_manager: ^0.4.0
 ```
+
+> **Note**: `app_links` is automatically included as a dependency - no need to add it manually!
 
 ### 2. Create a Strategy
 Implement `DeepLinkStrategy` to define your custom handling logic.
@@ -131,7 +133,7 @@ Implement `DeepLinkStrategy` to define your custom handling logic.
 ```dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../domain/deep_link_strategy.dart';
+import 'package:deep_link_manager/deep_link_manager.dart';
 
 class MyDeepLinkStrategy implements DeepLinkStrategy<String> {
   @override
@@ -162,80 +164,115 @@ class MyDeepLinkStrategy implements DeepLinkStrategy<String> {
 }
 ```
 
-### 3. Create an Auth Provider
-Implement `DeepLinkAuthProvider` for typed authentication handling.
+### 3. Create an Auth Provider (Optional)
+If you have authenticated routes, implement `DeepLinkAuthProvider`:
 
 ```dart
 class AppDeepLinkAuthProvider implements DeepLinkAuthProvider {
-  final GlobalKey<NavigatorState> _navigatorKey;
+  final AuthNotifier authNotifier; // Your auth state manager
 
-  AppDeepLinkAuthProvider(this._navigatorKey);
+  AppDeepLinkAuthProvider(this.authNotifier);
 
   @override
-  bool get isAuthenticated {
-    final context = _navigatorKey.currentContext;
-    if (context != null) {
-      return context.read<AuthBloc>().state is AuthenticatedState;
-    }
-    return false;
-  }
+  bool get isAuthenticated => authNotifier.isLoggedIn;
+
+  @override
+  Listenable get authStateChanges => authNotifier; // ✅ Reactive!
 
   @override
   void onAuthRequired(Uri uri) {
-    final context = _navigatorKey.currentContext;
-    if (context != null) {
-      GoRouter.of(context).go('/login');
-    }
+    // Navigate to login
+    GoRouter.of(context).go('/login');
   }
 }
 ```
 
 ### 4. Initialize in `main.dart`
 
+**Simple Setup (Most Apps):**
 ```dart
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final deepLinkManager = DeepLinkManager();
   await deepLinkManager.initialize(
-    strategies: [
-      MyDeepLinkStrategy(),
-    ],
-    authProvider: AppDeepLinkAuthProvider(deepLinkManager.navigatorKey),
+    strategies: [MyDeepLinkStrategy()],
+    authProvider: AppDeepLinkAuthProvider(authNotifier),
+    // ✅ App is automatically marked ready on first frame!
+    // ✅ Pending links auto-clear on logout!
   );
 
   runApp(MyApp());
 }
 ```
 
-### 5. Router Configuration
-Use the `navigatorKey` from `DeepLinkManager` in your Router config.
-Alternatively, you can pass your own `navigatorKey` to `initialize`.
-
+**Advanced Setup (Splash Screen Apps):**
 ```dart
-final _router = GoRouter(
-  navigatorKey: deepLinkManager.navigatorKey, // <--- Use the same instance
-  // ...
-);
-```
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-### 6. Handle App Readiness (Splash Screen)
-The Manager queues links until the app is "ready". You **MUST** call `setAppReady()` when ready.
+  final deepLinkManager = DeepLinkManager();
+  await deepLinkManager.initialize(
+    strategies: [MyDeepLinkStrategy()],
+    authProvider: AppDeepLinkAuthProvider(authNotifier),
+    autoSetAppReady: false, // Disable auto - wait for splash/config
+  );
 
-```dart
+  runApp(MyApp());
+}
+
+// Later, after splash screen finishes
 void onSplashFinished() {
-  DeepLinkManager().setAppReady();
+  DeepLinkManager().setAppReady();  // Now process pending links
 }
 ```
 
-### 7. Handling Authentication
-If a deep link requires authentication, it will be queued until the user logs in.
-After a successful login, call `checkPendingLinks()` to process any waiting links.
+### 5. Router Configuration
+Use the `navigatorKey` from `DeepLinkManager` or provide your own.
 
 ```dart
-// In your Login Bloc/Provider
+// Option 1: Use built-in key
+final _router = GoRouter(
+  navigatorKey: deepLinkManager.navigatorKey,
+  // ...
+);
+
+// Option 2: Provide your own
+final customKey = GlobalKey<NavigatorState>();
+await deepLinkManager.initialize(
+  strategies: [MyDeepLinkStrategy()],
+  navigatorKey: customKey,  // Use your key
+);
+```
+
+### 6. What's Automated in v0.4.0 ✨
+
+**No more manual calls needed!**
+- ✅ **Auto `setAppReady()`** - Automatically marks app as ready on first frame (disable with `autoSetAppReady: false`)
+- ✅ **Auto logout handling** - Pending links automatically cleared when user logs out
+- ✅ **Auto login processing** - Pending links automatically processed when user logs in
+
+**Before v0.4.0** ❌
+```dart
+// Manual cleanup required
+void logout() {
+  DeepLinkManager().clearPendingLink(); // ❌ Manual
+}
+
 void onLoginSuccess() {
-  DeepLinkManager().checkPendingLinks();
+  DeepLinkManager().checkPendingLinks(); // ❌ Manual
+}
+```
+
+**After v0.4.0** ✅
+```dart
+// Everything is automatic!
+void logout() {
+  myAuthNotifier.logout(); // ✅ Auto-clears pending links
+}
+
+void onLoginSuccess() {
+  myAuthNotifier.login(); // ✅ Auto-processes pending links
 }
 ```
 
@@ -247,19 +284,34 @@ void onLoginSuccess() {
 
 | Method | Description |
 |--------|-------------|
+| `initialize({...})` | Start listener with strategies, auth provider, and options |
 | `registerStrategy(DeepLinkStrategy)` | Add a strategy (sorted by priority) |
-| `initialize({strategies, authProvider, navigatorKey})` | Start listener with components |
-| `setAppReady()` | Signal UI ready, process pending links |
-| `checkPendingLinks()` | Manually trigger processing (e.g., after login) |
-| `clearPendingLink()` | Clear pending links (e.g., on logout) |
-| `navigatorKey` | GlobalKey for Navigation (injected or default) |
+| `setAppReady()` | Signal UI ready, process pending links (auto-called by default) |
+| `checkPendingLinks()` | Manually trigger processing (auto-called on login) |
+| `clearPendingLink()` | Clear pending links (auto-called on logout) |
+| `navigatorKey` | GlobalKey for Navigation (injected or built-in) |
 | `hasPendingLink` | Check if a link is queued |
 | `isInitialized` | Check if initialization completed |
+| `dispose()` | Clean up listeners and subscriptions |
+
+**Initialize Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `strategies` | `List<DeepLinkStrategy>` | `[]` | Strategies to handle links |
+| `authProvider` | `DeepLinkAuthProvider?` | `null` | Auth provider for protected routes |
+| `navigatorKey` | `GlobalKey<NavigatorState>?` | Built-in | Navigator key (optional) |
+| `pendingLinkExpiration` | `Duration?` | 5 minutes | How long pending links are kept |
+| `autoSetAppReady` | `bool` | `true` | Auto-mark ready on first frame |
+| `onLog` | `Function(String)?` | `null` | Debug logging callback |
+| `onError` | `Function(Object, StackTrace)?` | `null` | Error reporting callback |
 
 **Behaviors:**
-- **Link Expiration**: Pending links expire after 5 minutes
+- **Link Expiration**: Configurable via `pendingLinkExpiration` (default: 5 minutes)
+- **Auto App Ready**: Automatically marks app ready on first frame (disable for splash screens)
+- **Auto Logout**: Automatically clears pending links when auth state becomes false
+- **Auto Login**: Automatically processes pending links when auth state becomes true
 - **Race Protection**: Guards against re-entrant processing
-- **Error Handling**: Strategy execution is wrapped in try-catch
+- **Error Handling**: Strategy execution wrapped in try-catch
 
 ### `DeepLinkStrategy<T>`
 
@@ -277,7 +329,10 @@ void onLoginSuccess() {
 | Property/Method | Description |
 |-----------------|-------------|
 | `isAuthenticated` | Returns `true` if user is logged in |
+| `authStateChanges` | Optional `Listenable` for reactive auth handling (v0.4.0+) |
 | `onAuthRequired(Uri)` | Called when auth is required but missing |
+
+**Note:** Implementing `authStateChanges` enables automatic pending link processing on login/logout.
 
 ---
 
