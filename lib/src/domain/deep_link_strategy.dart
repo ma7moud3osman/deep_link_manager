@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 /// Abstract class defining a strategy for handling deep links.
 /// Implement this to define custom handling logic for specific URL patterns.
-/// Abstract class defining a strategy for handling deep links.
-/// Implement this to define custom handling logic for specific URL patterns.
 /// [T] is the type of data extracted from the URI. Use [void] or [Null] if no data.
 abstract class DeepLinkStrategy<T> {
   /// Unique identifier for this strategy (used for logging/debugging).

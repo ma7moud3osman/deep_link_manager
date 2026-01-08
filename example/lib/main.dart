@@ -6,21 +6,23 @@ import 'package:provider/provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Best Practice: Create the navigator key yourself so you have full control
-  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  // Create dependencies
+  final navigatorKey = GlobalKey<NavigatorState>();
+  final authNotifier = AuthNotifier();
   final deepLinkManager = DeepLinkManager();
 
   // Initialize with strategies and auth provider
   await deepLinkManager.initialize(
     strategies: [ProductDeepLinkStrategy()],
-    authProvider: SimpleDeepLinkAuthProvider(navigatorKey),
-    navigatorKey: navigatorKey, // Inject your key
+    authProvider: SimpleDeepLinkAuthProvider(navigatorKey, authNotifier),
+    navigatorKey: navigatorKey, // Optional - can be omitted to use built-in key
+    autoSetAppReady: true, // Default true - set false if using splash screen
     onLog: (message) => debugPrint(message),
   );
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthNotifier(),
+    ChangeNotifierProvider.value(
+      value: authNotifier,
       child: MyApp(navigatorKey: navigatorKey),
     ),
   );
@@ -98,16 +100,15 @@ class ProductDeepLinkStrategy implements DeepLinkStrategy<String> {
 
 class SimpleDeepLinkAuthProvider implements DeepLinkAuthProvider {
   final GlobalKey<NavigatorState> navigatorKey;
+  final AuthNotifier authNotifier;
 
-  SimpleDeepLinkAuthProvider(this.navigatorKey);
+  SimpleDeepLinkAuthProvider(this.navigatorKey, this.authNotifier);
 
   @override
-  bool get isAuthenticated {
-    final context = navigatorKey.currentContext;
-    if (context == null) return false;
-    // Check our simple AuthNotifier
-    return Provider.of<AuthNotifier>(context, listen: false).isLoggedIn;
-  }
+  bool get isAuthenticated => authNotifier.isLoggedIn;
+
+  @override
+  Listenable get authStateChanges => authNotifier;
 
   @override
   void onAuthRequired(Uri uri) {
@@ -127,36 +128,18 @@ class AuthNotifier extends ChangeNotifier {
   void login() {
     _isLoggedIn = true;
     notifyListeners();
-    // After login, check for pending deep links
-    DeepLinkManager().checkPendingLinks();
   }
 
   void logout() {
     _isLoggedIn = false;
     notifyListeners();
-    DeepLinkManager().clearPendingLink();
   }
 }
 
 // --- Screens ---
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Signal that the app is ready to process deep links
-    // In a real app, you might do this after a splash screen
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      DeepLinkManager().setAppReady();
-    });
-  }
 
   @override
   Widget build(BuildContext context) {

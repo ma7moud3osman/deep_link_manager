@@ -7,9 +7,6 @@ import 'package:flutter/material.dart';
 import '../domain/deep_link_auth_provider.dart';
 import '../domain/deep_link_strategy.dart';
 
-/// Duration after which pending deep links expire and are discarded.
-const _kPendingLinkExpiration = Duration(minutes: 5);
-
 class DeepLinkManager {
   // Singleton instance
   static DeepLinkManager _instance = DeepLinkManager._internal();
@@ -71,6 +68,9 @@ class DeepLinkManager {
   void Function(String message)? _onLog;
   void Function(Object error, StackTrace stack)? _onError;
 
+  /// Duration after which pending deep links expire and are discarded.
+  Duration _pendingLinkExpiration = const Duration(minutes: 5);
+
   /// Register a new strategy for handling deep links.
   /// Strategies are sorted by priority (higher first).
   void registerStrategy(DeepLinkStrategy strategy) {
@@ -85,12 +85,17 @@ class DeepLinkManager {
   /// [strategies]: List of strategies to handle deep links.
   /// [authProvider]: Optional typed auth provider for authentication checks.
   /// [navigatorKey]: Optional navigator key if you want to use your own instead of the built-in one.
+  /// [pendingLinkExpiration]: Duration after which pending links expire (default: 5 minutes).
+  /// [autoSetAppReady]: If true, automatically marks app as ready on first frame (default: true).
+  ///                     Set to false if you need to wait for splash screen/config before processing links.
   /// [onLog]: Optional callback for debugging logs (e.g. print to console).
   /// [onError]: Optional callback for reporting errors (e.g. to Crashlytics).
   Future<void> initialize({
     List<DeepLinkStrategy> strategies = const [],
     DeepLinkAuthProvider? authProvider,
     GlobalKey<NavigatorState>? navigatorKey,
+    Duration? pendingLinkExpiration,
+    bool autoSetAppReady = true,
     void Function(String message)? onLog,
     void Function(Object error, StackTrace stack)? onError,
   }) async {
@@ -106,6 +111,10 @@ class DeepLinkManager {
 
     if (navigatorKey != null) {
       _navigatorKey = navigatorKey;
+    }
+
+    if (pendingLinkExpiration != null) {
+      _pendingLinkExpiration = pendingLinkExpiration;
     }
 
     // Register initial strategies
@@ -142,7 +151,41 @@ class DeepLinkManager {
       },
     );
 
+    // Listen to reactive auth changes
+    final authListener = _authProvider?.authStateChanges;
+    if (authListener != null) {
+      authListener.addListener(_onAuthStateChanged);
+    }
+
+    // Check if user is already authenticated (handles race conditions during init)
+    if (_authProvider?.isAuthenticated == true) {
+      _log('User already authenticated, checking pending links');
+      checkPendingLinks();
+    }
+
+    // Auto-set app ready on first frame if enabled
+    if (autoSetAppReady) {
+      _log('Auto-setting app ready on first frame');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_navigatorKey.currentContext != null) {
+          setAppReady();
+        }
+      });
+    }
+
     _initializationCompleter!.complete();
+  }
+
+  void _onAuthStateChanged() {
+    final isAuthenticated = _authProvider?.isAuthenticated ?? false;
+
+    if (isAuthenticated) {
+      _log('Auth state changed to true, checking pending links');
+      checkPendingLinks();
+    } else {
+      _log('Auth state changed to false, clearing pending links');
+      _clearPending();
+    }
   }
 
   void _log(String message) {
@@ -255,7 +298,7 @@ class DeepLinkManager {
     // Check for link expiration
     if (_pendingLinkTimestamp != null) {
       final elapsed = DateTime.now().difference(_pendingLinkTimestamp!);
-      if (elapsed > _kPendingLinkExpiration) {
+      if (elapsed > _pendingLinkExpiration) {
         _log('Pending link expired after ${elapsed.inMinutes} minutes');
         _clearPending();
         return;
@@ -299,6 +342,7 @@ class DeepLinkManager {
   /// Dispose resources. Note: For singletons, this is typically only called
   /// on app termination via WidgetsBindingObserver.
   void dispose() {
+    _authProvider?.authStateChanges?.removeListener(_onAuthStateChanged);
     _linkSubscription?.cancel();
   }
 }

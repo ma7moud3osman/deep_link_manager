@@ -1,6 +1,6 @@
 name: deep_link_manager
 description: A generic deep link management package for Flutter.
-version: 0.2.0
+version: 0.4.0
 homepage: https://github.com/ma7moud3osman/deep_link_manager
 repository: https://github.com/ma7moud3osman/deep_link_manager
 issue_tracker: https://github.com/ma7moud3osman/deep_link_manager/issues

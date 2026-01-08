@@ -46,7 +46,7 @@ void main() {
 
   group('DeepLinkManager', () {
     test('initialization completes', () async {
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
       expect(manager.isInitialized, isTrue);
     });
 
@@ -82,7 +82,7 @@ void main() {
       manager.registerStrategy(strategy);
 
       // Initialize - this triggers _processLink
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
 
       // Since app is NOT ready, it should be pending
       expect(manager.hasPendingLink, isTrue);
@@ -109,7 +109,7 @@ void main() {
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
 
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
 
       // 2. Build UI to provide context
       await tester.pumpWidget(MaterialApp(
@@ -150,7 +150,7 @@ void main() {
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
 
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
 
       await tester.pumpWidget(MaterialApp(
         navigatorKey: manager.navigatorKey,
@@ -185,7 +185,10 @@ void main() {
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
 
-      await manager.initialize(authProvider: mockAuthProvider);
+      await manager.initialize(
+        authProvider: mockAuthProvider,
+        autoSetAppReady: false,
+      );
 
       await tester.pumpWidget(MaterialApp(
         navigatorKey: manager.navigatorKey,
@@ -223,7 +226,10 @@ void main() {
       final controller = StreamController<Uri>();
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
-      await manager.initialize(authProvider: mockAuthProvider);
+      await manager.initialize(
+        authProvider: mockAuthProvider,
+        autoSetAppReady: false,
+      );
 
       await tester.pumpWidget(MaterialApp(
         navigatorKey: manager.navigatorKey,
@@ -266,7 +272,7 @@ void main() {
       final controller = StreamController<Uri>();
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
 
       await tester.pumpWidget(MaterialApp(
         navigatorKey: manager.navigatorKey,
@@ -292,7 +298,10 @@ void main() {
 
     test('initializes with injected navigatorKey', () async {
       final customKey = GlobalKey<NavigatorState>();
-      await manager.initialize(navigatorKey: customKey);
+      await manager.initialize(
+        navigatorKey: customKey,
+        autoSetAppReady: false,
+      );
       expect(manager.navigatorKey, equals(customKey));
     });
 
@@ -313,7 +322,7 @@ void main() {
       final controller = StreamController<Uri>();
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
 
       await tester.pumpWidget(MaterialApp(
         navigatorKey: manager.navigatorKey,
@@ -353,7 +362,7 @@ void main() {
       final controller = StreamController<Uri>();
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
 
       await tester.pumpWidget(MaterialApp(
         navigatorKey: manager.navigatorKey,
@@ -385,7 +394,7 @@ void main() {
       final controller = StreamController<Uri>();
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
 
       await tester.pumpWidget(MaterialApp(
         navigatorKey: manager.navigatorKey,
@@ -406,7 +415,7 @@ void main() {
       final controller = StreamController<Uri>();
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
 
       expect(controller.hasListener, isTrue);
       manager.dispose();
@@ -427,7 +436,7 @@ void main() {
           .thenThrow(Exception('Native error'));
 
       // Should not throw
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
       expect(manager.isInitialized, isTrue);
     });
 
@@ -436,7 +445,7 @@ void main() {
       when(() => mockAppLinks.uriLinkStream)
           .thenAnswer((_) => controller.stream);
 
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
 
       controller.addError(Exception('Stream error'));
       await tester.pump();
@@ -486,7 +495,136 @@ void main() {
       });
 
       manager.registerStrategy(strategy);
-      await manager.initialize();
+      await manager.initialize(autoSetAppReady: false);
+    });
+
+    testWidgets('auth stream triggers pending link check', (tester) async {
+      final uri = Uri.parse('app://product/123');
+      final strategy = MockDeepLinkStrategy();
+      when(() => strategy.identifier).thenReturn('ProductStrategy');
+      when(() => strategy.priority).thenReturn(1);
+      when(() => strategy.canHandle(uri)).thenReturn(true);
+      when(() => strategy.extractData(uri)).thenReturn('123');
+      when(() => strategy.requiresAuth).thenReturn(true);
+
+      manager.registerStrategy(strategy);
+
+      final linkController = StreamController<Uri>();
+      when(() => mockAppLinks.uriLinkStream)
+          .thenAnswer((_) => linkController.stream);
+
+      // Setup auth with ValueNotifier
+      final authNotifier = ValueNotifier<bool>(false);
+      final authProvider = DeepLinkAuthProvider.fromCallbacks(
+        isAuthenticated: () => authNotifier.value,
+        onAuthRequired: (_) {},
+        authStateChanges: authNotifier,
+      );
+
+      await manager.initialize(
+        authProvider: authProvider,
+        autoSetAppReady: false,
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        navigatorKey: manager.navigatorKey,
+        home: const Scaffold(body: Text('Home')),
+      ));
+
+      // Mark app ready
+      manager.setAppReady();
+
+      // Emit link (requires auth)
+      linkController.add(uri);
+      await tester.pump();
+
+      // Should be pending
+      expect(manager.hasPendingLink, isTrue);
+      verifyNever(() => strategy.handle(any(), any(), any()));
+
+      // Change auth state
+      authNotifier.value = true;
+      await tester.pump();
+
+      // Should be handled
+      expect(manager.hasPendingLink, isFalse);
+      verify(() => strategy.handle(any(), any(), '123')).called(1);
+
+      authNotifier.dispose();
+      await linkController.close();
+    });
+
+    testWidgets('logout automatically clears pending links', (tester) async {
+      final uri = Uri.parse('app://product/123');
+      final strategy = MockDeepLinkStrategy();
+      when(() => strategy.identifier).thenReturn('ProductStrategy');
+      when(() => strategy.priority).thenReturn(1);
+      when(() => strategy.canHandle(uri)).thenReturn(true);
+      when(() => strategy.extractData(uri)).thenReturn('123');
+      when(() => strategy.requiresAuth).thenReturn(true);
+
+      manager.registerStrategy(strategy);
+
+      final linkController = StreamController<Uri>();
+      when(() => mockAppLinks.uriLinkStream)
+          .thenAnswer((_) => linkController.stream);
+
+      // Setup auth - start unauthenticated
+      final authNotifier = ValueNotifier<bool>(false);
+      final authProvider = DeepLinkAuthProvider.fromCallbacks(
+        isAuthenticated: () => authNotifier.value,
+        onAuthRequired: (_) {},
+        authStateChanges: authNotifier,
+      );
+
+      await manager.initialize(
+        authProvider: authProvider,
+        autoSetAppReady: false,
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        navigatorKey: manager.navigatorKey,
+        home: const Scaffold(body: Text('Home')),
+      ));
+
+      // Mark app ready
+      manager.setAppReady();
+
+      // Emit link while unauthenticated - should be pending
+      linkController.add(uri);
+      await tester.pump();
+
+      // Should be pending
+      expect(manager.hasPendingLink, isTrue);
+      verifyNever(() => strategy.handle(any(), any(), any()));
+
+      // Login
+      authNotifier.value = true;
+      await tester.pump();
+
+      // Should have been handled
+      expect(manager.hasPendingLink, isFalse);
+      verify(() => strategy.handle(any(), any(), '123')).called(1);
+
+      // Emit another link while authenticated
+      clearInteractions(strategy);
+      linkController.add(uri);
+      await tester.pump();
+
+      // Should be handled immediately
+      verify(() => strategy.handle(any(), any(), '123')).called(1);
+      expect(manager.hasPendingLink, isFalse);
+
+      // Emit link while still authenticated
+      clearInteractions(strategy);
+      linkController.add(uri);
+      await tester.pump();
+
+      // Should be handled
+      verify(() => strategy.handle(any(), any(), '123')).called(1);
+
+      authNotifier.dispose();
+      await linkController.close();
     });
   });
 }

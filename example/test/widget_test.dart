@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  testWidgets('App starts at home screen', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     final navigatorKey = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
