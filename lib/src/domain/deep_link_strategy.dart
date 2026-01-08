@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 /// Abstract class defining a strategy for handling deep links.
 /// Implement this to define custom handling logic for specific URL patterns.
-abstract class DeepLinkStrategy {
+/// Abstract class defining a strategy for handling deep links.
+/// Implement this to define custom handling logic for specific URL patterns.
+/// [T] is the type of data extracted from the URI. Use [void] or [Null] if no data.
+abstract class DeepLinkStrategy<T> {
   /// Unique identifier for this strategy (used for logging/debugging).
   /// Example: 'MicroPetDeepLinkStrategy'
   String get identifier;
@@ -18,11 +21,11 @@ abstract class DeepLinkStrategy {
   /// This is called when [canHandle] returns true.
   /// [context] is the [BuildContext] from the navigator key.
   /// [data] is the optional data extracted via [extractData], if any.
-  void handle(Uri uri, BuildContext context, Object? data);
+  void handle(Uri uri, BuildContext context, T? data);
 
   /// Optional: Extracts data from the URI to be stored as pending data
   /// if the app is not ready yet. This data will be passed to [handle] later.
-  Object? extractData(Uri uri) => null;
+  T? extractData(Uri uri) => null;
 
   /// Whether this strategy requires the user to be authenticated.
   /// If true, the manager might delay handling until the user is logged in.

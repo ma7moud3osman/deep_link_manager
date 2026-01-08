@@ -8,7 +8,7 @@ import 'package:mocktail/mocktail.dart';
 
 class MockAppLinks extends Mock implements AppLinks {}
 
-class MockDeepLinkStrategy extends Mock implements DeepLinkStrategy {}
+class MockDeepLinkStrategy extends Mock implements DeepLinkStrategy<dynamic> {}
 
 class MockDeepLinkAuthProvider extends Mock implements DeepLinkAuthProvider {}
 

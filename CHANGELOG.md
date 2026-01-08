@@ -1,3 +1,12 @@
+## 0.2.0
+
+*   **BREAKING CHANGE**: Refactored `DeepLinkStrategy` to be generic `DeepLinkStrategy<T>`.
+    *   `extractData` now returns `T?`.
+    *   `handle` now receives `T? data`.
+    *   This improves type safety for extracted data.
+*   Updated `DeepLinkManager` to support heterogeneous generic strategies.
+*   Example app updated to demonstrate Generic Strategies and Reactive Auth flow.
+
 ## 0.1.4
 
 *   Added `checkPendingLinks()` method to manually trigger pending link processing (e.g., after login).

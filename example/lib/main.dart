@@ -6,28 +6,35 @@ import 'package:provider/provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Best Practice: Create the navigator key yourself so you have full control
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   final deepLinkManager = DeepLinkManager();
 
   // Initialize with strategies and auth provider
   await deepLinkManager.initialize(
     strategies: [ProductDeepLinkStrategy()],
-    authProvider: SimpleDeepLinkAuthProvider(deepLinkManager.navigatorKey),
+    authProvider: SimpleDeepLinkAuthProvider(navigatorKey),
+    navigatorKey: navigatorKey, // Inject your key
     onLog: (message) => debugPrint(message),
   );
 
   runApp(
-    ChangeNotifierProvider(create: (_) => AuthNotifier(), child: const MyApp()),
+    ChangeNotifierProvider(
+      create: (_) => AuthNotifier(),
+      child: MyApp(navigatorKey: navigatorKey),
+    ),
   );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final GlobalKey<NavigatorState> navigatorKey;
+  const MyApp({super.key, required this.navigatorKey});
 
   @override
   Widget build(BuildContext context) {
-    // CRITICAL: Use the navigatorKey from DeepLinkManager
+    // CRITICAL: Use the navigatorKey you created and passed to DeepLinkManager
     final router = GoRouter(
-      navigatorKey: DeepLinkManager().navigatorKey,
+      navigatorKey: navigatorKey,
       initialLocation: '/',
       routes: [
         GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
@@ -54,7 +61,7 @@ class MyApp extends StatelessWidget {
 
 // --- Strategies ---
 
-class ProductDeepLinkStrategy implements DeepLinkStrategy {
+class ProductDeepLinkStrategy implements DeepLinkStrategy<String> {
   @override
   String get identifier => 'ProductStrategy';
 
@@ -69,7 +76,7 @@ class ProductDeepLinkStrategy implements DeepLinkStrategy {
   }
 
   @override
-  Object? extractData(Uri uri) {
+  String? extractData(Uri uri) {
     if (uri.pathSegments.length > 1) {
       return uri.pathSegments[1]; // The product ID
     }
@@ -80,8 +87,8 @@ class ProductDeepLinkStrategy implements DeepLinkStrategy {
   bool get requiresAuth => true;
 
   @override
-  void handle(Uri uri, BuildContext context, Object? data) {
-    if (data is String) {
+  void handle(Uri uri, BuildContext context, String? data) {
+    if (data != null && data.isNotEmpty) {
       GoRouter.of(context).push('/product/$data');
     }
   }
@@ -121,7 +128,7 @@ class AuthNotifier extends ChangeNotifier {
     _isLoggedIn = true;
     notifyListeners();
     // After login, check for pending deep links
-    DeepLinkManager().setAppReady();
+    DeepLinkManager().checkPendingLinks();
   }
 
   void logout() {

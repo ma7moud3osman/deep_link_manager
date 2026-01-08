@@ -133,7 +133,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/deep_link_strategy.dart';
 
-class MyDeepLinkStrategy implements DeepLinkStrategy {
+class MyDeepLinkStrategy implements DeepLinkStrategy<String> {
   @override
   String get identifier => 'MyDeepLinkStrategy';
 
@@ -146,7 +146,7 @@ class MyDeepLinkStrategy implements DeepLinkStrategy {
   }
 
   @override
-  Object? extractData(Uri uri) {
+  String? extractData(Uri uri) {
     if (uri.pathSegments.length > 1) return uri.pathSegments[1];
     return null;
   }
@@ -155,8 +155,8 @@ class MyDeepLinkStrategy implements DeepLinkStrategy {
   bool get requiresAuth => true;
 
   @override
-  void handle(Uri uri, BuildContext context, Object? data) {
-    if (data is! String || data.isEmpty) return;
+  void handle(Uri uri, BuildContext context, String? data) {
+    if (data == null || data.isEmpty) return;
     GoRouter.of(context).push('/product/$data');
   }
 }
@@ -261,16 +261,16 @@ void onLoginSuccess() {
 - **Race Protection**: Guards against re-entrant processing
 - **Error Handling**: Strategy execution is wrapped in try-catch
 
-### `DeepLinkStrategy`
+### `DeepLinkStrategy<T>`
 
 | Property/Method | Description |
 |-----------------|-------------|
 | `identifier` | Unique string for logging (required) |
 | `priority` | Ordering priority; higher = first (default: 0) |
 | `canHandle(Uri)` | Returns `true` if this strategy handles the URI |
-| `extractData(Uri)` | Extract data passed to `handle` |
+| `extractData(Uri)` | Extract data of type `T` passed to `handle` |
 | `requiresAuth` | Return `true` if user must be logged in |
-| `handle(Uri, BuildContext, Object?)` | Perform navigation |
+| `handle(Uri, BuildContext, T?)` | Perform navigation with typed data |
 
 ### `DeepLinkAuthProvider`
 
