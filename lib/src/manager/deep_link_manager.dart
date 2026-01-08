@@ -12,11 +12,27 @@ const _kPendingLinkExpiration = Duration(minutes: 5);
 
 class DeepLinkManager {
   // Singleton instance
-  static final DeepLinkManager _instance = DeepLinkManager._internal();
-  factory DeepLinkManager() => _instance;
-  DeepLinkManager._internal();
+  static DeepLinkManager _instance = DeepLinkManager._internal();
 
-  final AppLinks _appLinks = AppLinks();
+  /// Returns the singleton instance of [DeepLinkManager].
+  factory DeepLinkManager() => _instance;
+
+  /// Internal constructor.
+  DeepLinkManager._internal() : _appLinks = AppLinks();
+
+  /// Visible for testing to inject a mock instance.
+  @visibleForTesting
+  static void setInstance(DeepLinkManager manager) {
+    _instance = manager;
+  }
+
+  /// Visible for testing to inject dependencies.
+  @visibleForTesting
+  DeepLinkManager.test({
+    AppLinks? appLinks,
+  }) : _appLinks = appLinks ?? AppLinks();
+
+  final AppLinks _appLinks;
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   final List<DeepLinkStrategy> _strategies = [];
